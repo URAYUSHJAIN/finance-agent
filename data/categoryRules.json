@@ -1,0 +1,16 @@
+{
+  "Food & Dining": ["swiggy", "zomato", "dominos", "pizza", "restaurant", "cafe", "food", "eatsure", "kfc", "mcdonald", "burger", "dhaba", "bakery", "chai", "tea stall"],
+  "Groceries": ["blinkit", "zepto", "bigbasket", "grofers", "dmart", "instamart", "reliance fresh", "grocery", "kirana", "more supermarket"],
+  "Transport": ["uber", "ola", "rapido", "irctc", "redbus", "metro", "fuel", "petrol", "diesel", "parking", "toll", "fastag", "auto", "cab"],
+  "Shopping": ["amazon", "flipkart", "myntra", "ajio", "meesho", "nykaa", "shopping", "mall", "store", "mart"],
+  "Bills & Utilities": ["electricity", "recharge", "airtel", "jio", "vodafone", "vi ", "broadband", "wifi", "gas bill", "water bill", "dth", "postpaid", "prepaid"],
+  "Rent & Housing": ["rent", "landlord", "hostel", "pg fee", "maintenance"],
+  "Subscriptions": ["netflix", "spotify", "hotstar", "prime video", "youtube premium", "subscription", "apple music", "chatgpt", "openai", "claude", "notion"],
+  "Entertainment": ["bookmyshow", "pvr", "inox", "movie", "cinema", "gaming", "steam", "playstation"],
+  "Health & Medical": ["pharmeasy", "apollo", "medplus", "hospital", "clinic", "doctor", "medicine", "pharmacy", "diagnostic", "lab test"],
+  "Education": ["udemy", "coursera", "tuition", "coaching", "exam fee", "college fee", "book store", "leetcode", "gfg"],
+  "Investments": ["zerodha", "groww", "upstox", "mutual fund", "sip", "stock", "ipo", "kite", "coin"],
+  "Transfers & Family": ["papa", "mummy", "father", "mother", "sanjay jain", "family", "friend", "roommate"],
+  "ATM & Cash": ["atm", "cash withdrawal", "cash wdl"],
+  "Income": ["salary", "stipend", "refund", "cashback", "credited by", "received from", "payout"]
+}
