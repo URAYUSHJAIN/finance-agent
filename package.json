@@ -24,7 +24,9 @@
     "build": "next build",
     "start": "next start",
     "clean": "node -e \"const fs=require('fs');['.next','node_modules/.cache'].forEach(p=>fs.rmSync(p,{recursive:true,force:true}));console.log('Cleaned .next and node_modules/.cache')\"",
-    "test:parser": "node lib/parser.test.js"
+    "test:parser": "node lib/parser.test.js",
+    "test:eval": "node lib/eval.js",
+    "test": "node lib/parser.test.js && node lib/eval.js"
   },
   "dependencies": {
     "next": "14.2.35",

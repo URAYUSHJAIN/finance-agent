@@ -1,4 +1,22 @@
 import "./globals.css";
+import { Ubuntu, Ubuntu_Mono } from "next/font/google";
+
+// Self-hosted at build time by next/font — no render-blocking request to
+// Google's CDN, automatic `font-display: swap`, and (matching the app's whole
+// premise) nothing is fetched from a third party at runtime. Exposed as CSS
+// variables that globals.css maps onto --font-sans / --font-display / --font-mono.
+const ubuntu = Ubuntu({
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+  variable: "--font-ubuntu",
+  display: "swap",
+});
+const ubuntuMono = Ubuntu_Mono({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  variable: "--font-ubuntu-mono",
+  display: "swap",
+});
 
 // Placeholder production URL — swap for your real domain when you deploy.
 const SITE_URL = "https://finance-categorizer-agent.vercel.app";
@@ -93,14 +111,8 @@ const jsonLd = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${ubuntu.variable} ${ubuntuMono.variable}`}>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="true" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap"
-          rel="stylesheet"
-        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

@@ -9,9 +9,10 @@
   --debit: #cd645b; /* brightened from #c1584f to meet WCAG AA (4.5:1) on dark */
   --credit: #5e9c76;
   --warn: #d0a24b;
-  --font-display: "Fraunces", serif;
-  --font-mono: "IBM Plex Mono", monospace;
-  --font-sans: "Inter", -apple-system, sans-serif;
+  /* next/font exposes --font-ubuntu / --font-ubuntu-mono (self-hosted). */
+  --font-display: var(--font-ubuntu), -apple-system, sans-serif;
+  --font-mono: var(--font-ubuntu-mono), "IBM Plex Mono", ui-monospace, monospace;
+  --font-sans: var(--font-ubuntu), -apple-system, sans-serif;
 }
 
 * {
@@ -50,6 +51,25 @@ a {
 .log-scroll::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 3px;
+}
+
+/* ---------- keyboard focus ----------
+   Every interactive element gets a visible gold focus ring for keyboard users.
+   :focus-visible keeps it from showing on plain mouse clicks. */
+.tab:focus-visible,
+.chip:focus-visible,
+.log-toggle:focus-visible,
+.dropzone:focus-visible,
+select.category-select:focus-visible,
+.site-footer a:focus-visible,
+.footer-note a:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+/* fallback for browsers without :focus-visible */
+.dropzone:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
 }
 
 /* ---------- layout ----------
@@ -433,7 +453,7 @@ a {
   border-radius: 10px;
   padding: 16px;
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 12px;
   max-height: 200px;
   overflow-y: auto;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
@@ -526,6 +546,158 @@ a {
   color: var(--text-muted);
   text-align: right;
 }
+.bar-amount.over {
+  color: var(--debit);
+}
+
+/* ---------- per-category budgets ---------- */
+.cat-row {
+  margin-bottom: 4px;
+}
+.bar-row.budgeted {
+  grid-template-columns: 140px 1fr 70px auto;
+}
+.budget-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 6px;
+  background: var(--panel-raised);
+}
+.budget-field:focus-within {
+  border-color: var(--gold);
+}
+.budget-cur {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.budget-input {
+  width: 54px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 1px 0;
+}
+.budget-input:focus {
+  outline: none;
+}
+.budget-input::placeholder {
+  color: var(--text-muted);
+}
+/* hide number-input spinners for a cleaner look */
+.budget-input::-webkit-outer-spin-button,
+.budget-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.budget-input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.budget-warn {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--debit);
+  margin: 2px 0 10px 150px;
+}
+
+/* ---------- recurring spend ledger ---------- */
+.ledger-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px dashed var(--border);
+}
+.ledger-row:first-of-type {
+  border-top: none;
+}
+.ledger-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ledger-name {
+  color: var(--text);
+  font-size: 13px;
+  text-transform: capitalize;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ledger-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+}
+.ledger-figures {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  text-align: right;
+}
+.ledger-amount {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text);
+}
+.ledger-whatif {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--credit);
+  margin-top: 3px;
+}
+
+/* ---------- vs last upload comparison ---------- */
+.compare-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px dashed var(--border);
+  font-size: 12.5px;
+}
+.compare-row:first-of-type {
+  border-top: none;
+}
+.compare-cat {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compare-prev,
+.compare-cur {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+.compare-cur {
+  color: var(--text);
+}
+.compare-arrow {
+  color: var(--text-muted);
+}
+.compare-delta {
+  font-family: var(--font-mono);
+  min-width: 84px;
+  text-align: right;
+}
+.compare-delta.up {
+  color: var(--debit);
+}
+.compare-delta.down {
+  color: var(--credit);
+}
 
 /* ---------- table ---------- */
 .table-wrap {
@@ -538,7 +710,9 @@ a {
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  /* Ubuntu Mono runs a touch wider than IBM Plex Mono — nudged down 0.5px so
+     dates/amounts don't wrap in narrow columns. */
+  font-size: 12.5px;
 }
 
 thead th {
@@ -570,6 +744,20 @@ tbody tr.needs-review td:first-child {
   color: var(--text-muted);
   font-size: 12.5px;
   padding: 22px 14px;
+}
+
+/* ---------- table pagination ---------- */
+.load-more-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 14px;
+}
+.load-more-count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .amount-cell {
@@ -638,6 +826,31 @@ select.category-select {
   .summary-grid { grid-template-columns: 1fr; }
   .title { font-size: 30px; }
   .bar-row { grid-template-columns: 100px 1fr 60px; }
+
+  /* budgeted bar: name + amount on row 1, bar + budget input on row 2 */
+  .bar-row.budgeted {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "name amount"
+      "bar budget";
+    row-gap: 6px;
+    align-items: center;
+  }
+  .bar-row.budgeted > span:first-child { grid-area: name; }
+  .bar-row.budgeted .bar-track { grid-area: bar; }
+  .bar-row.budgeted .bar-amount { grid-area: amount; }
+  .bar-row.budgeted .budget-field { grid-area: budget; justify-self: end; }
+  .budget-warn { margin-left: 0; }
+
+  /* comparison: category on its own line, figures wrap below */
+  .compare-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .compare-cat { flex: 1 1 100%; }
+  .compare-delta { margin-left: auto; min-width: auto; }
 
   /* Comfortable touch targets (>= 44px) for thumbs. */
   .btn {

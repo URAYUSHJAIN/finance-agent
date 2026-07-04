@@ -34,6 +34,13 @@ export default function Home() {
   // Agent log is collapsed by default so the empty state stays a single clean
   // screen; the user can expand it to watch the FSM transitions.
   const [logOpen, setLogOpen] = useState(false);
+  // Per-category monthly budget limits { [category]: numberString }. Session
+  // only — nothing is persisted.
+  const [budgets, setBudgets] = useState({});
+  // Table pagination: render this many rows at a time so a 300+ row statement
+  // doesn't mount hundreds of <select>s at once. "Load more" bumps it.
+  const PAGE_SIZE = 50;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const fileInputRef = useRef(null);
 
   // The active result shown in the table/summary is always the latest run.
@@ -121,6 +128,7 @@ export default function Home() {
     if (result.ok) {
       const label = tab === "paste" ? `Pasted text #${runs.length + 1}` : file.name;
       setRuns((prev) => [...prev, { id: Date.now(), label, rows: result.rows }]);
+      setVisibleCount(PAGE_SIZE);
     } else {
       setFatalError(result.log[result.log.length - 1]?.message || "Agent failed.");
     }
@@ -148,6 +156,8 @@ export default function Home() {
     setFatalError(null);
     setReviewLowFirst(false);
     setOnlyLowConf(false);
+    setBudgets({});
+    setVisibleCount(PAGE_SIZE);
   }
 
   function exportCsv() {
@@ -215,6 +225,189 @@ export default function Home() {
     return months.length ? months : null;
   }, [runs]);
 
+  // Recurring Spend Ledger: debit merchants that repeat within the statement,
+  // plus anything tagged Subscriptions (a subscription recurs even if it shows
+  // up once). Treating one statement as ~one month, the group total is its
+  // monthly cost — which drives the "what if I cut this" projection.
+  const recurring = useMemo(() => {
+    if (!rows) return null;
+    const groups = {};
+    rows.forEach((r) => {
+      if (r.direction !== "debit") return;
+      const key = (r.description || "").trim().toLowerCase();
+      if (!key) return;
+      const g = (groups[key] ||= { name: r.description.trim(), category: r.category, count: 0, total: 0 });
+      g.count += 1;
+      g.total += r.amount;
+      if (g.category === "Uncategorized" && r.category !== "Uncategorized") g.category = r.category;
+    });
+    const list = Object.values(groups)
+      .filter((g) => g.count >= 2 || g.category === "Subscriptions")
+      .sort((a, b) => b.total - a.total);
+    return list.length ? list : null;
+  }, [rows]);
+
+  // Two-statement diff: the latest upload vs the one before it, per category.
+  const comparison = useMemo(() => {
+    if (runs.length < 2) return null;
+    const cur = runs[runs.length - 1];
+    const prev = runs[runs.length - 2];
+    const sumByCat = (rs) => {
+      const m = {};
+      rs.forEach((r) => {
+        if (r.direction !== "debit") return;
+        m[r.category] = (m[r.category] || 0) + r.amount;
+      });
+      return m;
+    };
+    const c = sumByCat(cur.rows);
+    const p = sumByCat(prev.rows);
+    const cats = new Set([...Object.keys(c), ...Object.keys(p)]);
+    const list = [...cats]
+      .map((cat) => ({ cat, cur: c[cat] || 0, prev: p[cat] || 0, delta: (c[cat] || 0) - (p[cat] || 0) }))
+      .filter((d) => d.delta !== 0)
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+    return { curLabel: cur.label, prevLabel: prev.label, list };
+  }, [runs]);
+
+  function setBudget(cat, value) {
+    setBudgets((prev) => ({ ...prev, [cat]: value }));
+  }
+
+  // Render the summary (3 stat cards + top categories) to a PNG entirely on a
+  // canvas — no server, no library. Handy for screenshotting a monthly recap.
+  async function downloadSummaryImage() {
+    if (!summary) return;
+    try {
+      await (document.fonts?.ready || Promise.resolve());
+    } catch {
+      /* fonts API unavailable — fall back to system fonts */
+    }
+    const scale = 2;
+    const W = 900;
+    const H = 560;
+    const canvas = document.createElement("canvas");
+    canvas.width = W * scale;
+    canvas.height = H * scale;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(scale, scale);
+
+    const COL = {
+      bg: "#0e1113",
+      panel: "#171b1e",
+      border: "#2a3034",
+      text: "#ececE7",
+      muted: "#8b9298",
+      gold: "#c9a24b",
+      debit: "#cd645b",
+      credit: "#5e9c76",
+    };
+    // next/font self-hosts under hashed family names — read them off the CSS
+    // variables so the canvas uses the real Ubuntu faces (falling back cleanly
+    // if for some reason they aren't loaded).
+    const rootStyle = getComputedStyle(document.documentElement);
+    const monoVar = rootStyle.getPropertyValue("--font-ubuntu-mono").trim();
+    const sansVar = rootStyle.getPropertyValue("--font-ubuntu").trim();
+    const mono = `${monoVar ? monoVar + ", " : ""}"Ubuntu Mono", monospace`;
+    const sans = `${sansVar ? sansVar + ", " : ""}"Ubuntu", sans-serif`;
+    const rupee = (n) => "₹" + Math.round(n).toLocaleString("en-IN");
+
+    const roundRect = (x, y, w, h, r) => {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    };
+
+    // background
+    ctx.fillStyle = COL.bg;
+    ctx.fillRect(0, 0, W, H);
+    const grad = ctx.createLinearGradient(0, 0, 0, 180);
+    grad.addColorStop(0, "rgba(201,162,75,0.10)");
+    grad.addColorStop(1, "rgba(201,162,75,0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, 180);
+
+    // header
+    ctx.fillStyle = COL.gold;
+    ctx.font = `500 13px ${mono}`;
+    ctx.fillText("RULE-BASED · NO AI API · RUNS IN YOUR BROWSER", 40, 52);
+    ctx.fillStyle = COL.text;
+    ctx.font = `700 30px ${sans}`;
+    ctx.fillText("Finance Summary", 40, 92);
+
+    // stat cards
+    const cards = [
+      { label: "TOTAL SPENT", value: rupee(summary.debit), color: COL.debit },
+      { label: "TOTAL RECEIVED", value: rupee(summary.credit), color: COL.credit },
+      { label: "NET", value: (summary.net >= 0 ? "+" : "-") + rupee(Math.abs(summary.net)), color: summary.net >= 0 ? COL.credit : COL.debit },
+    ];
+    const cardW = (W - 80 - 24) / 3;
+    cards.forEach((c, i) => {
+      const x = 40 + i * (cardW + 12);
+      const y = 120;
+      ctx.fillStyle = COL.panel;
+      roundRect(x, y, cardW, 96, 10);
+      ctx.fill();
+      ctx.strokeStyle = COL.border;
+      ctx.lineWidth = 1;
+      roundRect(x, y, cardW, 96, 10);
+      ctx.stroke();
+      ctx.fillStyle = COL.muted;
+      ctx.font = `400 11px ${mono}`;
+      ctx.fillText(c.label, x + 18, y + 32);
+      ctx.fillStyle = c.color;
+      ctx.font = `500 26px ${mono}`;
+      ctx.fillText(c.value, x + 18, y + 68);
+    });
+
+    // top categories
+    ctx.fillStyle = COL.muted;
+    ctx.font = `400 11px ${mono}`;
+    ctx.fillText("TOP SPENDING CATEGORIES", 40, 262);
+    const bars = summary.topCategories.slice(0, 6);
+    const maxCat = summary.maxCat || 1;
+    bars.forEach(([cat, amt], i) => {
+      const y = 288 + i * 38;
+      ctx.fillStyle = COL.text;
+      ctx.font = `400 13px ${sans}`;
+      ctx.fillText(cat, 40, y + 14);
+      const trackX = 240;
+      const trackW = W - trackX - 140;
+      ctx.fillStyle = COL.panel;
+      roundRect(trackX, y + 4, trackW, 12, 6);
+      ctx.fill();
+      ctx.fillStyle = COL.gold;
+      const fillW = Math.max(6, (amt / maxCat) * trackW);
+      roundRect(trackX, y + 4, fillW, 12, 6);
+      ctx.fill();
+      ctx.fillStyle = COL.muted;
+      ctx.font = `400 13px ${mono}`;
+      ctx.textAlign = "right";
+      ctx.fillText(rupee(amt), W - 40, y + 15);
+      ctx.textAlign = "left";
+    });
+
+    // footer
+    ctx.fillStyle = COL.border;
+    ctx.fillRect(40, H - 46, W - 80, 1);
+    ctx.fillStyle = COL.muted;
+    ctx.font = `400 11px ${mono}`;
+    ctx.fillText("Generated by Finance Categorizer Agent · runs in your browser", 40, H - 24);
+
+    const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "finance-summary.png";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <main className="shell">
       <header className="header">
@@ -260,7 +453,20 @@ export default function Home() {
           <div>
             <div
               className="dropzone"
+              role="button"
+              tabIndex={0}
+              aria-label={
+                tab === "sheet"
+                  ? "Upload a CSV or XLSX file — click or press Enter to browse"
+                  : "Upload a PDF statement — click or press Enter to browse"
+              }
               onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
@@ -325,6 +531,11 @@ export default function Home() {
           {rows && (
             <button className="btn" onClick={exportCsv}>
               Export CSV
+            </button>
+          )}
+          {rows && (
+            <button className="btn" onClick={downloadSummaryImage} title="Render your summary as a shareable PNG">
+              Download summary image
             </button>
           )}
           {runs.length > 0 && (
@@ -394,16 +605,104 @@ export default function Home() {
           {summary.topCategories.length > 0 && (
             <div className="panel bars">
               <h2 className="summary-label as-heading">Top spending categories</h2>
-              <p className="section-cap">Where most of your money went, ranked highest to lowest.</p>
-              {summary.topCategories.map(([cat, amt]) => (
-                <div className="bar-row" key={cat}>
-                  <span>{cat}</span>
-                  <div className="bar-track">
-                    <div className="bar-fill" style={{ width: `${(amt / summary.maxCat) * 100}%` }} />
+              <p className="section-cap">
+                Where most of your money went. Set a monthly limit and the bar turns red when you go over.
+              </p>
+              {summary.topCategories.map(([cat, amt]) => {
+                const limit = parseFloat(budgets[cat]);
+                const hasLimit = Number.isFinite(limit) && limit > 0;
+                const over = hasLimit && amt > limit;
+                return (
+                  <div className="cat-row" key={cat}>
+                    <div className="bar-row budgeted">
+                      <span>{cat}</span>
+                      <div className="bar-track">
+                        <div
+                          className="bar-fill"
+                          style={{
+                            width: `${Math.min(100, (amt / summary.maxCat) * 100)}%`,
+                            background: over ? "var(--debit)" : "var(--gold)",
+                          }}
+                        />
+                      </div>
+                      <span className={`bar-amount ${over ? "over" : ""}`}>₹{amt.toLocaleString("en-IN")}</span>
+                      <span className="budget-field">
+                        <span className="budget-cur">₹</span>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min="0"
+                          className="budget-input"
+                          placeholder="limit"
+                          aria-label={`Monthly budget limit for ${cat}`}
+                          value={budgets[cat] ?? ""}
+                          onChange={(e) => setBudget(cat, e.target.value)}
+                        />
+                      </span>
+                    </div>
+                    {over && (
+                      <div className="budget-warn" role="status">
+                        ⚠ Over your ₹{limit.toLocaleString("en-IN")} limit by ₹
+                        {(amt - limit).toLocaleString("en-IN")}
+                      </div>
+                    )}
                   </div>
-                  <span className="bar-amount">₹{amt.toLocaleString("en-IN")}</span>
-                </div>
-              ))}
+                );
+              })}
+            </div>
+          )}
+
+          {recurring && (
+            <div className="panel bars">
+              <h2 className="summary-label as-heading">Recurring spend ledger</h2>
+              <p className="section-cap">
+                Merchants you paid more than once (and subscriptions). The “cut in half” note shows what you'd
+                save if you halved each one.
+              </p>
+              {recurring.map((g) => {
+                const halfMonth = g.total / 2;
+                return (
+                  <div className="ledger-row" key={g.name}>
+                    <div className="ledger-main">
+                      <span className="ledger-name">{g.name}</span>
+                      <span className="ledger-meta">
+                        {g.category} · ×{g.count}
+                      </span>
+                    </div>
+                    <div className="ledger-figures">
+                      <span className="ledger-amount">₹{g.total.toLocaleString("en-IN")}/mo</span>
+                      <span className="ledger-whatif">
+                        Cut in half → save ₹{Math.round(halfMonth).toLocaleString("en-IN")}/mo · ₹
+                        {Math.round(halfMonth * 12).toLocaleString("en-IN")}/yr
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {comparison && comparison.list.length > 0 && (
+            <div className="panel bars">
+              <h2 className="summary-label as-heading">Vs your last upload</h2>
+              <p className="section-cap">
+                How this statement ({comparison.curLabel}) compares to the previous one ({comparison.prevLabel}),
+                per category.
+              </p>
+              {comparison.list.map((d) => {
+                const up = d.delta > 0;
+                return (
+                  <div className="compare-row" key={d.cat}>
+                    <span className="compare-cat">{d.cat}</span>
+                    <span className="compare-prev">₹{d.prev.toLocaleString("en-IN")}</span>
+                    <span className="compare-arrow">→</span>
+                    <span className="compare-cur">₹{d.cur.toLocaleString("en-IN")}</span>
+                    <span className={`compare-delta ${up ? "up" : "down"}`}>
+                      {up ? "▲" : "▼"} ₹{Math.abs(d.delta).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -455,7 +754,10 @@ export default function Home() {
           <div className="filter-row">
             <button
               className={`chip ${onlyLowConf ? "active" : ""}`}
-              onClick={() => setOnlyLowConf((v) => !v)}
+              onClick={() => {
+                setOnlyLowConf((v) => !v);
+                setVisibleCount(PAGE_SIZE);
+              }}
               disabled={lowConfCount === 0}
               title="Show only rows the agent couldn't confidently categorize"
             >
@@ -463,7 +765,10 @@ export default function Home() {
             </button>
             <button
               className={`chip ${reviewLowFirst ? "active" : ""}`}
-              onClick={() => setReviewLowFirst((v) => !v)}
+              onClick={() => {
+                setReviewLowFirst((v) => !v);
+                setVisibleCount(PAGE_SIZE);
+              }}
               title="Sort lowest-confidence rows to the top"
             >
               Low-confidence first
@@ -484,7 +789,7 @@ export default function Home() {
                 </tr>
               </thead>
               <tbody>
-                {displayRows.map(({ r, idx }) => (
+                {displayRows.slice(0, visibleCount).map(({ r, idx }) => (
                   <tr key={idx} className={r.confidence === 0 ? "needs-review" : ""}>
                     <td data-label="Date">{r.date}</td>
                     <td data-label="Description">{r.description}</td>
@@ -531,6 +836,20 @@ export default function Home() {
               </tbody>
             </table>
           </div>
+
+          {displayRows.length > visibleCount && (
+            <div className="load-more-row">
+              <span className="load-more-count">
+                Showing {visibleCount} of {displayRows.length}
+              </span>
+              <button
+                className="btn"
+                onClick={() => setVisibleCount((n) => Math.min(n + PAGE_SIZE, displayRows.length))}
+              >
+                Load {Math.min(PAGE_SIZE, displayRows.length - visibleCount)} more
+              </button>
+            </div>
+          )}
         </>
       )}
 
