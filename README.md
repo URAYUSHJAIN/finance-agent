@@ -19,6 +19,10 @@ everything using plain JavaScript rules that run entirely on your device.
 
 ![Finance Categorizer Agent — screenshot](docs/screenshot.png)
 
+## 🔗 Live Link
+
+[**Open Finance Categorizer Agent**](https://github.com/URAYUSHJAIN/finance-agent)
+
 </div>
 
 ---
